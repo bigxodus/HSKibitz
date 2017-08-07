@@ -1,4 +1,4 @@
-package model
+package com.waynlaw.model
 
 case class Card(
     id: String,

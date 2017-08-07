@@ -1,9 +1,8 @@
-package model.properties
+package com.waynlaw.model.properties
 
 import com.typesafe.config.ConfigFactory
 
 /**
-  *
   *
   * @author: Lawrence
   * @since: 2017. 6. 19.

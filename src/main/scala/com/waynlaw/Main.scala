@@ -1,6 +1,8 @@
-import actors.KibitzSupervisor
+package com.waynlaw
+
 import akka.actor.ActorSystem
-import model.Card
+import com.waynlaw.actors.KibitzSupervisor
+import com.waynlaw.model.Card
 import org.json4s._
 import org.json4s.native.JsonMethods._
 
@@ -9,8 +11,6 @@ object Main {
     val system = ActorSystem.create("hs-kibitz")
 
     system.actorOf(KibitzSupervisor.props, "kibitz-supervisor")
-
-
 
     implicit val formats = DefaultFormats
 

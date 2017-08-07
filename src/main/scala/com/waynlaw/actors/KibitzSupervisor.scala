@@ -1,8 +1,8 @@
-package actors
+package com.waynlaw.actors
 
-import actors.common.FileWatchActor
+import com.waynlaw.actors.common.FileWatchActor
 import akka.actor.{Actor, ActorLogging, Props}
-import model.properties.LogProperties
+import com.waynlaw.model.properties.LogProperties
 
 object KibitzSupervisor {
   def props = Props(classOf[KibitzSupervisor])

@@ -13,5 +13,6 @@ libraryDependencies ++= Seq(
   "com.typesafe.akka" %% "akka-stream" % "2.5.2",
   "com.typesafe.akka" %% "akka-stream-testkit" % "2.5.2" % Test,
   "commons-io" % "commons-io" % "2.5",
-  "org.json4s" %% "json4s-native" % "3.5.2"
+  "org.json4s" %% "json4s-native" % "3.5.2",
+  "org.scalatest" %% "scalatest" % "3.0.1" % Test
 )

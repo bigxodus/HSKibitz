@@ -1,4 +1,4 @@
-package actors.common
+package com.waynlaw.actors.common
 
 import java.nio.file.Paths
 
@@ -24,16 +24,33 @@ class FileWatchActor(filePath: String) extends Actor with ActorLogging {
 
   import context.dispatcher
   import FileWatchActor._
+
   implicit val system = context.system
   implicit val materializer = ActorMaterializer()
 
   override def preStart(): Unit = {
-    readContinuously(filePath, "UTF-8").map(_.toString).runForeach(println)
     log.info(s"log filePath : ${filePath}")
+    readContinuously(filePath, "UTF-8").map(_.toString).runForeach(msg => self ! msg)
   }
 
   override def receive: Receive = {
-    case msg =>
+    case line : String =>
+      val endPattern = "TAG_CHANGE Entity=[a-zA-z0-9가-힣]+ tag=PLAYSTATE value=[a-zA-z0-9가-힣]+".r
+
+      val startPattern = "CREATE_GAME".r
+
+      val status = line match {
+        // 게임 시작
+        case matchedString if startPattern.findFirstIn(line).isDefined =>
+          "Start"
+        // 게임 종료
+        case matchedString if endPattern.findFirstIn(line).isDefined =>
+          "End"
+        case _ =>
+          ""
+      }
+
+      Console println status + "/" + line
   }
 
   private def readContinuously[T](path: String, encoding: String): Source[String, _] =
