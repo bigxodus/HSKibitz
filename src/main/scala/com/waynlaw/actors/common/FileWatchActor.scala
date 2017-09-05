@@ -35,22 +35,50 @@ class FileWatchActor(filePath: String) extends Actor with ActorLogging {
 
   override def receive: Receive = {
     case line : String =>
-      val endPattern = "TAG_CHANGE Entity=[a-zA-z0-9가-힣]+ tag=PLAYSTATE value=[a-zA-z0-9가-힣]+".r
 
-      val startPattern = "CREATE_GAME".r
+      val startPattern = "GameState.DebugPrintPower\\(\\) - CREATE_GAME".r
+
+      val winnerPattern = "GameState.DebugPrintPower\\(\\) - TAG_CHANGE Entity=[a-zA-z0-9가-힣]+ tag=PLAYSTATE value=WON".r
+      val loserPattern = "GameState.DebugPrintPower\\(\\) - TAG_CHANGE Entity=[a-zA-z0-9가-힣]+ tag=PLAYSTATE value=LOST".r
+
+      val endPattern = "GameState.DebugPrintPower\\(\\) - TAG_CHANGE Entity=GameEntity tag=STATE value=COMPLETE".r
+
+//      val cardId = "CardID=".r
+
+      // 카드 Draw
+      val showEntityPlayer1 = "GameState.DebugPrintPower\\(\\) -     SHOW_ENTITY - .*player=1.*".r
+      val showEntityPlayer2 = "GameState.DebugPrintPower\\(\\) -     SHOW_ENTITY - .*player=2.*".r
+
+      // 현재 플레이 사용자
+      val currentPlayer = "GameState.DebugPrintPower\\(\\) -     TAG_CHANGE Entity=[a-zA-z0-9가-힣]+ tag=CURRENT_PLAYER value=1".r
+
+      val userPattern = "(?<=Entity=)[^\\s]+".r
+      val statePattern = "(?<=value=).+$".r
 
       val status = line match {
         // 게임 시작
         case matchedString if startPattern.findFirstIn(line).isDefined =>
-          "Start"
+          Console println "Game Start"
         // 게임 종료
         case matchedString if endPattern.findFirstIn(line).isDefined =>
-          "End"
+          Console println "Game End"
+        case matchedString if winnerPattern.findFirstIn(line).isDefined =>
+          Console println "승자 : " + userPattern.findFirstIn(matchedString).get
+        case matchedString if loserPattern.findFirstIn(line).isDefined =>
+          Console println "패자 : " + userPattern.findFirstIn(matchedString).get
+//        case matchedString if cardId.findFirstIn(line).isDefined =>
+//          Console println "카드 Id : " + matchedString
+        case matchedString if showEntityPlayer1.findFirstIn(line).isDefined =>
+          Console println "Show Entity : " + matchedString
+        case matchedString if showEntityPlayer2.findFirstIn(line).isDefined =>
+//          Console println "Show Entity : " + matchedString
+        case matchedString if currentPlayer.findFirstIn(line).isDefined =>
+          Console println "현재 플레이어: " + userPattern.findFirstIn(matchedString).get
         case _ =>
           ""
       }
 
-      Console println status + "/" + line
+//      Console println status + "/" + line
   }
 
   private def readContinuously[T](path: String, encoding: String): Source[String, _] =
