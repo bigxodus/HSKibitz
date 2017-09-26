@@ -7,6 +7,7 @@ import akka.stream.{ActorMaterializer, OverflowStrategy}
 import akka.stream.scaladsl.Source
 import org.apache.commons.io.input.{Tailer, TailerListenerAdapter}
 
+import scala.collection.mutable.ArrayBuffer
 import scala.concurrent.duration._
 
 object FileWatchActor {
@@ -28,13 +29,15 @@ class FileWatchActor(filePath: String) extends Actor with ActorLogging {
   implicit val system = context.system
   implicit val materializer = ActorMaterializer()
 
+  var deck = ArrayBuffer.empty[String]
+
   override def preStart(): Unit = {
     log.info(s"log filePath : ${filePath}")
     readContinuously(filePath, "UTF-8").map(_.toString).runForeach(msg => self ! msg)
   }
 
   override def receive: Receive = {
-    case line : String =>
+    case line: String =>
 
       val startPattern = "GameState.DebugPrintPower\\(\\) - CREATE_GAME".r
 
@@ -43,8 +46,6 @@ class FileWatchActor(filePath: String) extends Actor with ActorLogging {
 
       val endPattern = "GameState.DebugPrintPower\\(\\) - TAG_CHANGE Entity=GameEntity tag=STATE value=COMPLETE".r
 
-//      val cardId = "CardID=".r
-
       // 카드 Draw
       val showEntityPlayer1 = "GameState.DebugPrintPower\\(\\) -     SHOW_ENTITY - .*player=1.*".r
       val showEntityPlayer2 = "GameState.DebugPrintPower\\(\\) -     SHOW_ENTITY - .*player=2.*".r
@@ -52,8 +53,15 @@ class FileWatchActor(filePath: String) extends Actor with ActorLogging {
       // 현재 플레이 사용자
       val currentPlayer = "GameState.DebugPrintPower\\(\\) -     TAG_CHANGE Entity=[a-zA-z0-9가-힣]+ tag=CURRENT_PLAYER value=1".r
 
-      val userPattern = "(?<=Entity=)[^\\s]+".r
+      // 카드 Play
+      val playCardPlayer1 = "GameState.DebugPrintPower\\(\\) - BLOCK_START BlockType=PLAY .*player=1.*".r
+      val playCardPlayer2 = "GameState.DebugPrintPower\\(\\) - BLOCK_START BlockType=PLAY .*player=2.*".r
+
+      val entityPattern = "(?<=Entity=)[^\\s]+".r
       val statePattern = "(?<=value=).+$".r
+      val cardIdPattern = "(?<=CardID=).+$".r
+
+      val cardidPattern = "(?<=cardId=)[^\\s]+".r
 
       val status = line match {
         // 게임 시작
@@ -62,23 +70,39 @@ class FileWatchActor(filePath: String) extends Actor with ActorLogging {
         // 게임 종료
         case matchedString if endPattern.findFirstIn(line).isDefined =>
           Console println "Game End"
+          deck.clear()
+        // 승자
         case matchedString if winnerPattern.findFirstIn(line).isDefined =>
-          Console println "승자 : " + userPattern.findFirstIn(matchedString).get
+          Console println "승자 : " + entityPattern.findFirstIn(matchedString).get
+        // 패자
         case matchedString if loserPattern.findFirstIn(line).isDefined =>
-          Console println "패자 : " + userPattern.findFirstIn(matchedString).get
-//        case matchedString if cardId.findFirstIn(line).isDefined =>
-//          Console println "카드 Id : " + matchedString
+          Console println "패자 : " + entityPattern.findFirstIn(matchedString).get
+        //        case matchedString if cardId.findFirstIn(line).isDefined =>
+        //          Console println "카드 Id : " + matchedString
+
+
         case matchedString if showEntityPlayer1.findFirstIn(line).isDefined =>
-          Console println "Show Entity : " + matchedString
+          Console println "Show Entity Player1: " + cardIdPattern.findFirstMatchIn(matchedString).get
+        // Card 찾음
+        //          deck += cardIdPattern.findFirstMatchIn(matchedString).get.toString()
         case matchedString if showEntityPlayer2.findFirstIn(line).isDefined =>
-//          Console println "Show Entity : " + matchedString
+          Console println "Show Entity Player2: " + cardIdPattern.findFirstMatchIn(matchedString).get.toString()
+          deck += cardIdPattern.findFirstMatchIn(matchedString).get.toString()
         case matchedString if currentPlayer.findFirstIn(line).isDefined =>
-          Console println "현재 플레이어: " + userPattern.findFirstIn(matchedString).get
+          Console println "현재 플레이어: " + entityPattern.findFirstIn(matchedString).get
+          if (entityPattern.findFirstIn(matchedString).get == "현명") {
+            Console println ""
+            Console println "현재 보유 덱 : " + deck.mkString(", ")
+            Console println ""
+          }
+        case matchedString if playCardPlayer2.findFirstMatchIn(line).isDefined =>
+          Console println "플레이 카드 : " + cardidPattern.findFirstIn(matchedString).get
+          deck - cardidPattern.findFirstIn(matchedString).get
         case _ =>
           ""
       }
 
-//      Console println status + "/" + line
+    //      Console println status + "/" + line
   }
 
   private def readContinuously[T](path: String, encoding: String): Source[String, _] =
