@@ -5,7 +5,11 @@ import java.nio.file.Paths
 import akka.actor.{Actor, ActorLogging, Props}
 import akka.stream.{ActorMaterializer, OverflowStrategy}
 import akka.stream.scaladsl.Source
+import com.waynlaw.Main.getClass
+import com.waynlaw.model.Card
 import org.apache.commons.io.input.{Tailer, TailerListenerAdapter}
+import org.json4s.DefaultFormats
+import org.json4s.native.JsonMethods.parse
 
 import scala.collection.mutable.ArrayBuffer
 import scala.concurrent.duration._
@@ -36,6 +40,14 @@ class FileWatchActor(filePath: String) extends Actor with ActorLogging {
     readContinuously(filePath, "UTF-8").map(_.toString).runForeach(msg => self ! msg)
   }
 
+  implicit val formats = DefaultFormats
+
+  val resourcesPath = getClass.getResource("/cards.json")
+  val json = io.Source.fromFile(resourcesPath.getPath).mkString
+  val cards = parse(json).extract[List[Card]]
+
+  val cardsMap = cards.map(x => (x.id, x.name)).toMap
+
   override def receive: Receive = {
     case line: String =>
 
@@ -43,36 +55,70 @@ class FileWatchActor(filePath: String) extends Actor with ActorLogging {
       val GAME_STATE_RE = "GameState".r
       val METHOD_RE = "(?<=GameState.).*(?=\\(\\))".r
 
-
       // DebugPrintPower
-
       val SHOW_ENTITY = "SHOW_ENTITY".r
+
+      // BlockType=PLAY
+      val BLOCK_START = "BLOCK_START BlockType=PLAY".r
+
+      val TAG_CHANGE_RE = "TAG_CHANGE".r
+
+      // 일단 value=1 까지 살펴보면 Play 데이터를 얻을 수 있을 것 같다.
+      val JUST_PLAYED_RE = "JUST_PLAYED value=1".r
 
       val CARD_ID_RE = "(?<=[cC]ardI[dD]=)[^\\s]+".r
       val PLAYER1_RE = "player=1".r
+      val PLAYER2_RE = "player=2".r
 
       GAME_STATE_RE.findFirstIn(line).isDefined match {
         case true =>
           METHOD_RE.findFirstMatchIn(line).get.toString match {
             case "DebugPrintPower" =>
+              // SHOW_ENTITY를 보면 상대편은 카드를 낼 때, 나는 카드가 들어올 때를 알 수 있다.
               SHOW_ENTITY.findFirstMatchIn(line) match {
                 case Some(_) =>
                   if (CARD_ID_RE.findFirstMatchIn(line).isDefined && PLAYER1_RE.findFirstMatchIn(line).isDefined) {
-                    // 내 카드
-                    Console println CARD_ID_RE.findFirstMatchIn(line).get.toString
+                    // 상대 플레이 카드
+                    val cardId: String = CARD_ID_RE.findFirstMatchIn(line).get.toString
+                    Console println s"Opponent's play: ${getName(cardId)}"
+                  } else if (CARD_ID_RE.findFirstMatchIn(line).isDefined && PLAYER2_RE.findFirstMatchIn(line).isDefined) {
+                    // 내 드로우 카드
+                    val cardId: String = CARD_ID_RE.findFirstMatchIn(line).get.toString
+                    Console println s"My draw: ${getName(cardId)}"
+                  } else {
+                    Console println line
                   }
                 case None =>
                 }
 
 
-            case "DebugPrintPowerList" =>
+              BLOCK_START.findFirstMatchIn(line) match {
+                case Some(_) =>
+                  if (CARD_ID_RE.findFirstMatchIn(line).isDefined && PLAYER2_RE.findFirstMatchIn(line).isDefined) {
+                    // 내 플레이 카드 아닌듯
+                    val cardId: String = CARD_ID_RE.findFirstMatchIn(line).get.toString
+//                    Console println s"My play: ${getName(cardId)} : ${line}"
+                  }
+                case None => {
+                }
+              }
+
+              TAG_CHANGE_RE.findFirstMatchIn(line) match {
+                case Some(_) =>
+                  if (JUST_PLAYED_RE.findFirstMatchIn(line).isDefined && PLAYER2_RE.findFirstMatchIn(line).isDefined) {
+                    // 내 플레이 카드
+                    val cardId: String = CARD_ID_RE.findFirstMatchIn(line).get.toString
+                    Console println s"My play: ${getName(cardId)} : ${line}"
+                  }
+                case None => {
+                }
+              }
+                case "DebugPrintPowerList" =>
             case "DebugPrintOptions" =>
             case "SendChoices" =>
-              CARD_ID_RE.findFirstMatchIn(line) match {
-                case Some(cardId) =>
-                  // 멀리건시에 잡고가는 카드
-                  Console println cardId
-                case None =>
+              if (CARD_ID_RE.findFirstMatchIn(line).isDefined) {
+                val cardId: String = CARD_ID_RE.findFirstMatchIn(line).get.toString
+                Console println s"Mulligan of mine: ${getName(cardId)} : ${line}"
               }
             case "DebugPrintEntitiesChosen" =>
 //              Console println line
@@ -87,6 +133,10 @@ class FileWatchActor(filePath: String) extends Actor with ActorLogging {
 
   def powerHandler(line: String) = {
 
+  }
+
+  def getName(id: String): String = {
+    s"${cardsMap.getOrElse(id, None).getOrElse("None")} (;${id})"
   }
 
   /*
